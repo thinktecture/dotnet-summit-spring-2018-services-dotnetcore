@@ -1,6 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using TodoApi.Models;
 using TodoApi.Services;
 
@@ -10,63 +16,62 @@ namespace TodoApi.Controllers
 	[Route("api/[controller]")]
 	public class ListController : Controller
 	{
-		private readonly ListService _lists;
+		private readonly TodoService _todoService;
 
-		public ListController(ListService lists)
+		public ListController(TodoService todoService)
 		{
-			_lists = lists;
+			_todoService = todoService ?? throw new ArgumentNullException(nameof(todoService));
 		}
 
-		// GET api/list
 		/// <summary>
-		/// Returns an dictionary of available Todo lists and their IDs
+		/// Gets all available Todo lists
 		/// </summary>
-		/// <returns>A dictionary, the keys are the ids and the values are the names of the available todo lists.</returns>
+		/// <returns>Todo lists with their Ids and names</returns>
 		[HttpGet]
+		[SwaggerResponse((int)HttpStatusCode.Unauthorized, Description = "User not authorized")]
+		[SwaggerResponse(200, typeof(Dictionary<int, string>))]
 		public IActionResult Get()
 		{
-			return Ok(_lists.GetAllLists());
-		}
-		
-		// GET api/list
-		/// <summary>
-		/// Returns the name of a Todo list from its id
-		/// </summary>
-		/// <returns>The name of the list with the given id</returns>
-		[HttpGet("{listId}")]
-		public IActionResult Get(int listId)
-		{
-			return Ok(new ValueViewModel() {
-				Value = _lists.GetListName(listId),
-			});
+			return Ok(_todoService.GetAllLists());
 		}
 
-		// POST api/list
+		/// <summary>
+		/// Gets the name of a specific list
+		/// </summary>
+		/// <param name="listId">Id of the list to fetch the name from</param>
+		/// <returns>The name of the list</returns>
+		[HttpGet("{listId}")]
+		[SwaggerResponse(200, typeof(ValueViewModel))]
+		[SwaggerResponse((int)HttpStatusCode.Unauthorized, Description = "User not authorized")]
+		public IActionResult Get(int listId)
+		{
+			return Ok(new ValueViewModel() { Value = _todoService.GetListName(listId)});
+		}
+
 		[HttpPost]
 		public IActionResult Post([FromBody] ValueViewModel data)
 		{
 			return Ok(new IdViewModel()
 			{
-				Id = _lists.AddList(data.Value),
+				Id = _todoService.AddList(data.Value),
 			});
 		}
 
-		// PUT api/values/5
 		[HttpPut("{listId}")]
-		public IActionResult Put(int listId, [FromBody]  ValueViewModel data)
+		public IActionResult Put(int listId, [FromBody] ValueViewModel data)
 		{
-			_lists.ChangeName(listId, data.Value);
+			_todoService.ChangeListName(listId, data.Value);
 			return Ok();
 		}
-
-		// DELETE api/list/5
+		
 		[HttpDelete("{listId}")]
 		public IActionResult Delete(int listId)
 		{
-			if (_lists.DeleteList(listId))
+			if (_todoService.DeleteList(listId))
 				return Ok();
 
 			return NotFound();
 		}
+
 	}
 }

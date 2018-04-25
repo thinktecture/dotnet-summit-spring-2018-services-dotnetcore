@@ -11,18 +11,18 @@ namespace TodoApi.Controllers
 	[Route("api/list/{listId}/[controller]")]
 	public class ItemController : Controller
 	{
-		private readonly ItemService _items;
+		private readonly TodoService _todoService;
 
-		public ItemController(ItemService items)
+		public ItemController(TodoService todoService)
 		{
-			_items = items;
+			_todoService = todoService;
 		}
 
 		// GET api/list/{listId}/item/
 		[HttpGet]
 		public IActionResult Get(int listId)
 		{
-			return Ok(_items.GetAllItems(listId));
+			return Ok(_todoService.GetAllItems(listId));
 		}
 
 		// POST api/list/{listId}/item/
@@ -31,7 +31,7 @@ namespace TodoApi.Controllers
 		{
 			return Ok(new IdViewModel()
 			{
-				Id = _items.AddItem(listId, data.Value),
+				Id = _todoService.AddItem(listId, data.Value),
 			});
 		}
 
@@ -39,7 +39,7 @@ namespace TodoApi.Controllers
 		[HttpPut("{itemId}")]
 		public IActionResult Put(int listId, int itemId, [FromBody] ValueViewModel data)
 		{
-			_items.ChangeText(listId, itemId, data.Value);
+			_todoService.ChangeItemText(listId, itemId, data.Value);
 			return Ok();
 		}
 
@@ -47,7 +47,7 @@ namespace TodoApi.Controllers
 		[HttpPost("{itemId}/toggle")]
 		public IActionResult Post(int listId, int itemId)
 		{
-			_items.ToggleItemDone(listId, itemId);
+			_todoService.ToggleItemDone(listId, itemId);
 			return Ok();
 		}
 
@@ -55,7 +55,7 @@ namespace TodoApi.Controllers
 		[HttpDelete("{itemId}")]
 		public IActionResult Delete(int listId, int itemId)
 		{
-			if (_items.DeleteItem(listId, itemId))
+			if (_todoService.DeleteItem(listId, itemId))
 				return Ok();
 
 			return NotFound();

@@ -25,13 +25,14 @@ namespace PushApi
 				.AddJwtBearer(options =>
 				{
 					options.Authority = Configuration.GetSection("IdentityServer").GetValue<string>("Url");
-					options.Audience = "pushapi";
-					options.RequireHttpsMetadata = false;
+					options.Audience = Configuration.GetSection("IdentityServer").GetValue<string>("Audience");
+					options.RequireHttpsMetadata = false; // Never do this in production
 					options.Events = new JwtBearerEvents()
 					{
 						OnMessageReceived = context =>
 						{
-							if (context.Request.Path.Value.StartsWith("/hubs") && context.Request.Query.TryGetValue("token", out var token))
+							if (context.Request.Path.Value.StartsWith("/hubs")
+							    && context.Request.Query.TryGetValue("token", out var token))
 							{
 								context.Token = token;
 							}
@@ -51,8 +52,13 @@ namespace PushApi
 			{
 				app.UseDeveloperExceptionPage();
 			}
+			else
+			{
+				app.UseHsts();
+				app.UseHttpsRedirection();
+			}
 
-			app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
+			app.UseCors(policy => policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin().AllowCredentials());
 			app.UseAuthentication();
 			app.UseSignalR(routes =>
 			{

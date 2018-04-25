@@ -11,25 +11,22 @@ namespace TodoApi
 	{
 		public static void Main(string[] args)
 		{
-			using (var host = BuildWebHost(args))
+			using (var host = CreateWebHostBuilder(args).Build())
 			{
-				var configuration = host.Services.GetService<IConfiguration>();
-				var instrumentationKey = configuration.GetSection("ApplicationInsights").GetValue<string>("InstrumentationKey");
+				var config = host.Services.GetService<IConfiguration>();
 
 				var loggerConfig = new LoggerConfiguration()
 					.Enrich.FromLogContext()
 					.Enrich.WithThreadId()
 					.Enrich.WithProcessId()
 					.Enrich.WithProcessName()
-					.MinimumLevel.Debug()
-					.ReadFrom.Configuration(configuration)
-					.WriteTo.Console();
-
-				if (!String.IsNullOrEmpty(instrumentationKey))
-				{
-					loggerConfig = loggerConfig
-						.WriteTo.ApplicationInsightsEvents(instrumentationKey);
-				}
+					.Enrich.WithAssemblyName()
+					.Enrich.WithAssemblyVersion()
+					.Enrich.WithMachineName()
+					.Enrich.WithProperty("Application", "TodoApi")
+					.ReadFrom.Configuration(config)
+					.WriteTo.Console()
+					.WriteTo.Seq("http://localhost:5341");
 
 				Log.Logger = loggerConfig.CreateLogger();
 
@@ -44,11 +41,9 @@ namespace TodoApi
 			}
 		}
 
-		public static IWebHost BuildWebHost(string[] args) =>
+		public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
 			WebHost.CreateDefaultBuilder(args)
 				.UseStartup<Startup>()
-				.UseSerilog()
-				.UseApplicationInsights()
-				.Build();
+				.UseSerilog();
 	}
 }

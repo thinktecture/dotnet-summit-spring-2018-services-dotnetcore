@@ -1,14 +1,20 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using AspNetCoreRateLimit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.PlatformAbstractions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Swashbuckle.AspNetCore.Swagger;
 using TodoApi.Models;
 using TodoApi.Services;
@@ -28,25 +34,25 @@ namespace TodoApi
 		// This method gets called by the runtime. Use this method to add services to the container.
 		public void ConfigureServices(IServiceCollection services)
 		{
+			services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+				.AddJwtBearer(options =>
+				{
+					options.Authority = Configuration.GetSection("IdentityServer").GetValue<string>("Url");
+					options.Audience = "api1";
+					options.RequireHttpsMetadata = false; // do not do this in production!
+				});
+
 			services
 				.AddMemoryCache()
 				.Configure<IpRateLimitOptions>(Configuration.GetSection("IpRateLimiting"))
 				.Configure<IpRateLimitPolicies>(Configuration.GetSection("IpRateLimitPolicies"))
 				.AddSingleton<IIpPolicyStore, MemoryCacheIpPolicyStore>()
 				.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>()
-				.AddScoped<ListService>()
-				.AddScoped<ItemService>()
+				.AddResponseCompression()
+				.AddScoped<TodoService>()
 				.AddDbContext<TodoContext>(options => options.UseSqlServer(Configuration.GetConnectionString("sqlserver")))
-				.AddSingleton<SignalRConnection>()
-				.AddSingleton<IHostedService>(ctx => ctx.GetRequiredService<SignalRConnection>());
-
-			services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-				.AddJwtBearer(options =>
-				{
-					options.Authority = Configuration.GetSection("IdentityServer").GetValue<string>("Url");
-					options.Audience = "api1";
-					options.RequireHttpsMetadata = false;
-				});
+				.AddSingleton<PushService>()
+				.AddSingleton<IHostedService>(ctx => ctx.GetRequiredService<PushService>()); ;
 
 			services.AddSwaggerGen(c =>
 			{
@@ -55,7 +61,7 @@ namespace TodoApi
 					Title = ".NET Summit Todo Api",
 					Version = "v1",
 				});
-				c.IncludeXmlComments(Path.Combine(PlatformServices.Default.Application.ApplicationBasePath, "TodoApi.xml"));
+				c.IncludeXmlComments(Path.Combine(System.AppContext.BaseDirectory, "TodoApi.xml"));
 				c.AddSecurityDefinition("oauth2", new OAuth2Scheme()
 				{
 					Type = "oauth2",
@@ -74,7 +80,12 @@ namespace TodoApi
 				});
 			});
 
-			services.AddMvc();
+			services.AddMvc(options =>
+				{
+					options.RespectBrowserAcceptHeader = true;
+				})
+				.AddXmlDataContractSerializerFormatters()
+				.SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
 		}
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -82,6 +93,7 @@ namespace TodoApi
 		{
 			using (var scope = app.ApplicationServices.GetRequiredService<IServiceScopeFactory>().CreateScope())
 			{
+				// In Production, use something more resilient
 				scope.ServiceProvider.GetRequiredService<TodoContext>().Database.Migrate();
 			}
 
@@ -89,11 +101,17 @@ namespace TodoApi
 			{
 				app.UseDeveloperExceptionPage();
 			}
+			else
+			{
+				app.UseHsts();
+				app.UseHttpsRedirection();
+			}
 
 			app.UseIpRateLimiting();
-			app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin().AllowCredentials());
+			app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin().AllowCredentials()); // Do NOT do this in production
 			app.UseAuthentication();
 			app.UseMvc();
+			app.UseResponseCompression();
 			app.UseSwagger();
 			app.UseSwaggerUI(c =>
 			{
