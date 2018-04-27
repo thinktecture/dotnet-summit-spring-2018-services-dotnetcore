@@ -1,5 +1,5 @@
 # Build Image
-FROM microsoft/dotnet:2.1-sdk AS build-env
+FROM microsoft/aspnetcore-build:2.1.300-preview1 AS build-env
 WORKDIR /app
 
 COPY *.csproj ./
@@ -9,7 +9,7 @@ COPY . ./
 RUN dotnet publish -c Release -o out
 
 # Build runtime image
-FROM microsoft/dotnet:2.1-runtime
+FROM microsoft/aspnetcore:2.1.0-preview1
 WORKDIR /app
 COPY --from=build-env /app/out .
 ENTRYPOINT ["dotnet", "IdentityServer.dll"]
